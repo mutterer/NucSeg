@@ -1,0 +1,176 @@
+// Action Bar description file : NucSeg_
+run("Action Bar","/plugins/ActionBar/NucSeg_.txt");
+exit();
+
+// version 20190620
+
+<DnDAction>
+file=getArgument();
+print ("Opening file:",file);
+open(file);
+</DnDAction>
+
+<line>
+<button>
+label=New Session
+icon=noicon
+arg=<macro>
+newUID();
+</macro>
+</line>
+
+<line>
+<button>
+label=Select  Options
+icon=noicon
+arg=<macro>
+var sizeThr= call('ij.Prefs.get','nucseg.selectSmoothness',3);
+v= getNumber('Smoothness factor',sizeThr);
+call('ij.Prefs.set','nucseg.selectSmoothness',v);
+</macro>
+</line>
+
+<line>
+<button>
+label=Soft Select 1
+icon=noicon
+arg=<tool>
+var smoothness= call('ij.Prefs.get','nucseg.selectSmoothness',3);
+getCursorLoc(x, y, z, flags);
+id=getImageID;
+setBatchMode(1);
+run("Select None");
+run("Duplicate...","title=a");
+run("Gaussian Blur...", "radius="+smoothness);
+id2=getImageID;
+while (flags&16!=0) {
+	selectImage(id);
+	getCursorLoc(x1, y1, z, flags);
+	bf = flags;
+	selectImage(id2);
+	doWand(x, y, 0.5*sqrt((x1-x)*(x1-x)+(y1-y)*(y1-y)), "8-connected");
+	getSelectionCoordinates(xpoints, ypoints);
+	selectImage(id);
+	makeSelection("freehand", xpoints, ypoints);
+	wait(20);
+	flags = bf;
+}
+roiManager('add');
+roiManager("show all with labels");
+</tool>
+</line>
+
+<line>
+<button>
+label=Split merged ROIs
+icon=noicon
+arg=<tool>
+setBatchMode(1);
+getCursorLoc(x, y, z, flags);
+while ( flags&16>0) {
+	getCursorLoc(x1, y1, z, flags);
+	makeLine(x,y,x1,y1);
+	wait(10);
+}
+id=getImageID;
+run("Select None");
+run("Duplicate...", "title=temp");
+makeLine(x,y,x1,y1);
+run("Line to Area");
+roiManager('add');
+run("Create Mask");
+hit=-1;
+for (i=0;i<roiManager('count');i++) {
+	roiManager('select', i);
+	List.setMeasurements;
+	if  (parseInt(List.getValue('Max'))==255) {
+		hit=i;
+		break;
+	}
+}
+selectImage(id);
+rois= newArray(2);
+rois[0] = hit;
+rois[1] = roiManager('count')-1;
+roiManager("select", rois);
+roiManager("AND");
+roiManager("Add");
+rois[1] = roiManager('count')-1;
+roiManager("select", rois);
+roiManager("XOR");
+roiManager("Split");
+roiManager("select", roiManager('count')-3);
+roiManager("delete");
+roiManager("select", roiManager('count')-3);
+roiManager("delete");
+setBatchMode(0);
+
+
+</tool>
+</line>
+
+<line>
+<button>
+label=Remove clicked ROI
+icon=noicon
+arg=<tool>
+getCursorLoc(x0, y0, z, flags);
+id = getImageID;
+for (i=0;i< roiManager("count");i++) {
+	roiManager("select", i);
+	if (Roi.contains(x0,y0)) break;
+}
+roiManager("delete");
+</tool>
+</line>
+
+
+<line>
+<button>
+label=Remove all ROIs
+icon=noicon
+arg=<macro>
+roiManager("reset");
+run("Remove Overlay");
+run("Select None");
+</macro>
+</line>
+
+<line>
+<button>
+label=Save ROIs file
+icon=noicon
+arg=<macro>
+t=getTitle();
+if (isOpen("ROI Manager")) {
+	roiManager("Deselect");
+	roiManager("Save", getInfo('image.directory')+File.separator+t+"_RoiSet.zip");
+	roiManager("reset");
+	selectWindow("ROI Manager");
+	roiManager("show all with labels");
+}
+</macro>
+</line>
+
+<startupAction>
+
+print ("Nouvelle session 'NucSeg'");
+getDateAndTime(year, month, dayOfWeek, dayOfMonth, hour, minute, second, msec);
+print (year+"-"+IJ.pad(month,2)+"-"+IJ.pad(dayOfMonth,2)+" "+IJ.pad(hour,2)+":"+IJ.pad(minute,2)+":"+IJ.pad(second,2));
+
+newUID();
+run("ROI Manager...");
+</startupAction>
+<onTop>
+<codeLibrary>
+function closeByTitle(s) {
+	if (isOpen(s)) { selectWindow(s); run("Close");}
+}
+
+function newUID() {
+	getDateAndTime(year, month, dayOfWeek, dayOfMonth, hour, minute, second, msec);
+	uid = ""+year+""+IJ.pad(month,2)+""+IJ.pad(dayOfMonth,2)+""+IJ.pad(hour,2)+""+IJ.pad(minute,2)+""+IJ.pad(second,2);
+	call ('ij.Prefs.set','rois.uid',uid);
+	print("New experiment. UID: "+uid);
+}
+</codeLibrary>
